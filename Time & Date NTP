@@ -1,0 +1,89 @@
+#include <LiquidCrystal.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
+#include <ESP8266WiFi.h>
+
+// ===== WiFi Credentials =====
+const char* ssid     = "Antonelli";
+const char* password = "maomao1206";
+
+// ===== LCD Pin Mapping (YOUR exact wiring) =====
+const int rs = 2;    // D4  -> RS
+const int en = 0;    // D3  -> EN
+const int d4 = 4;    // D2  -> D4
+const int d5 = 5;    // D1  -> D5
+const int d6 = 16;   // D6  -> D6
+const int d7 = 15;   // D5  -> D7
+LiquidCrystal lcd(D4, D3, D2, D1, D6, D5);
+
+// ===== NTP Setup =====
+// South Africa Standard Time (SAST) = UTC+2 = 7200 seconds
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 7200, 60000);
+
+// ===== Toggle Variables =====
+unsigned long previousMillis = 0;
+const long interval = 5000;   // Switch between time/date every 5 seconds
+bool showTime = true;
+
+void setup() {
+  Serial.begin(115200);
+  delay(100);
+
+  lcd.begin(16, 2);
+  lcd.setCursor(0, 0);
+  lcd.print("Connecting...");
+
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+  Serial.print("Connected! IP: ");
+  Serial.println(WiFi.localIP());
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Syncing NTP...");
+
+  timeClient.begin();
+  timeClient.setTimeOffset(7200);   // SAST (UTC+2)
+  while (!timeClient.update()) {
+    timeClient.forceUpdate();
+  }
+
+  lcd.clear();
+}
+
+void loop() {
+  timeClient.update();
+
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    showTime = !showTime;
+    lcd.clear();
+  }
+
+  if (showTime) {
+    // ---- TIME PAGE ----
+    lcd.setCursor(0, 0);
+    lcd.print("Time:");
+    lcd.setCursor(0, 1);
+    lcd.print(timeClient.getFormattedTime());   // HH:MM:SS
+  } else {
+    // ---- DATE PAGE ----
+    time_t rawTime = timeClient.getEpochTime();
+    struct tm *ti = localtime(&rawTime);
+
+    char dateBuf[17];
+    strftime(dateBuf, sizeof(dateBuf), "%Y-%m-%d", ti);
+
+    lcd.setCursor(0, 0);
+    lcd.print("Date:");
+    lcd.setCursor(0, 1);
+    lcd.print(dateBuf);                         // YYYY-MM-DD
+  }
+}
